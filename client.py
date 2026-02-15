@@ -1,4 +1,4 @@
-import socks, socket, threading, random, sys
+import socks, threading, random, sys
 from colorama import Fore, Style, init
 init(autoreset=True)
 user_color = Fore.GREEN
@@ -7,17 +7,13 @@ user_colors = {}
 def receive_messages(sock, my_username):
     while True:
         try:
-            msg = sock.recv(1024).decode()
-            if not msg:
+            data = sock.recv(8192).decode()
+            if not data:
                 print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
                 sock.close()
                 break
-            if "rejected" in msg.lower() or "blocked" in msg.lower():
-                print(f"\n{Fore.RED}{msg}{Style.RESET_ALL}")
-                sock.close()
-                break
-            if msg.startswith("[+]"):
-                parts = msg.split(":", 1)
+            if data.startswith("[+]"):
+                parts = data.split(":", 1)
                 if len(parts) == 2:
                     user_part, msg_part = parts
                     username = user_part.replace("[+]", "").strip()
@@ -28,7 +24,7 @@ def receive_messages(sock, my_username):
                     sys.stdout.write(f"{user_color}{my_username} > {Style.RESET_ALL}")
                     sys.stdout.flush()
                     continue
-            sys.stdout.write(f"\r{msg}\n{user_color}{my_username} > {Style.RESET_ALL}")
+            sys.stdout.write(f"\r{data}\n{user_color}{my_username} > {Style.RESET_ALL}")
             sys.stdout.flush()
         except Exception:
             print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
@@ -50,8 +46,24 @@ def main():
         if len(username) > 3:
             break
         print("Username must be more than 3 characters long.")
+    password = input("Enter your password: ").strip()
+    if len(password) < 3:
+        print("Password must be at least 3 characters long.")
+        return
+    s.recv(1024)  
     s.send(username.encode())
+    s.recv(1024)  
+    s.send(password.encode())
     print("\nWaiting for admin approval... (you cannot chat until accepted)")
+    while True:
+        response = s.recv(1024).decode()
+        if "accepted" in response.lower():
+            print(f"{Fore.GREEN}You have been accepted!{Style.RESET_ALL}")
+            break
+        elif "rejected" in response.lower() or "blocked" in response.lower():
+            print(f"{Fore.RED}{response}{Style.RESET_ALL}")
+            s.close()
+            return
     threading.Thread(target=receive_messages, args=(s, username), daemon=True).start()
     while True:
         try:
