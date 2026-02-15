@@ -11,6 +11,9 @@ def print_logo():
  ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
 (____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
     """)
+    print(Fore.RED + r"""
+BUILT BY: https://github.com/fjcj0
+    """)
 def receive_messages(sock, my_username):
     while True:
         try:

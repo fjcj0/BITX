@@ -20,6 +20,9 @@ def print_logo():
  ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
 (____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
     """)
+    print(Fore.RED + r"""
+BUILT BY: https://github.com/fjcj0
+    """)
 def generate_key():
     if not os.path.exists(KEY_FILE):
         os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
@@ -124,7 +127,6 @@ def handle_client(conn, addr):
                 break
             message = data.decode()
             broadcast_message(username, message, is_user=True)
-
     except Exception as e:
         print(f"Error with {addr}: {e}")
     finally:
