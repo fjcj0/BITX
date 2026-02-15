@@ -13,6 +13,13 @@ blocked_users = set()
 pending_users = []
 COLORS = [Fore.RED, Fore.GREEN, Fore.YELLOW, Fore.BLUE, Fore.MAGENTA, Fore.CYAN, Fore.WHITE]
 user_colors = {}
+def print_logo():
+    print(Fore.RED + r"""
+ ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
+(  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
+ ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
+(____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
+    """)
 def generate_key():
     if not os.path.exists(KEY_FILE):
         os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
@@ -123,7 +130,7 @@ def handle_client(conn, addr):
     finally:
         remove_client(username)
 def admin_interface():
-    print("\n=== Admin Interface ===")
+    print_logo()
     while True:
         print("\n1. Accept pending users\n2. Show connected users\n3. Block a user\n4. Exit")
         choice = input("Choice: ").strip()

@@ -4,6 +4,13 @@ init(autoreset=True)
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
 user_colors = {}
+def print_logo():
+    print(Fore.RED + r"""
+ ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
+(  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
+ ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
+(____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
+    """)
 def receive_messages(sock, my_username):
     while True:
         try:
@@ -31,7 +38,7 @@ def receive_messages(sock, my_username):
             sock.close()
             break
 def main():
-    print(f"{Fore.CYAN}=== Global Chat Client ==={Style.RESET_ALL}")
+    print_logo()
     server_onion = input("Enter server address: ").strip()
     port = int(input("Enter server port: ").strip())
     s = socks.socksocket()
