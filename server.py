@@ -46,7 +46,7 @@ def load_users():
             decrypted = fernet.decrypt(data).decode()
             for line in decrypted.splitlines():
                 parts = line.strip().split(",")
-                if len(parts) == 3:  # username,password,status
+                if len(parts) == 3:  
                     if parts[2] == "block":
                         blocked_users.add(parts[0])
                     rows.append(parts)
