@@ -3,6 +3,7 @@ from colorama import Fore, init
 from datetime import datetime
 from crypto_chat import encrypt_message, decrypt_message
 from cryptography.fernet import Fernet
+import time
 init(autoreset=True)
 PORT = 5010
 HIDDEN_SERVICE_DIR = "./global_chat"
@@ -116,7 +117,7 @@ def handle_client(conn, addr):
         pending_users.append((username, conn, password))
         print(f"New user pending approval: {username}")
         while (username, conn, password) in pending_users:
-            pass
+            time.sleep(0.5)
         clients[username] = conn
         user_colors[username] = random.choice(COLORS)
         save_user(username, password, "unblock")
