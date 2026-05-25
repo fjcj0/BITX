@@ -1,5 +1,6 @@
 import socks, threading, random, sys
 from colorama import Fore, Style, init
+from crypto_chat import encrypt_message, decrypt_message
 init(autoreset=True)
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
@@ -17,7 +18,8 @@ BUILT BY: https://github.com/fjcj0
 def receive_messages(sock, my_username):
     while True:
         try:
-            data = sock.recv(8192).decode()
+            encrypted_data = sock.recv(8192)
+            data = decrypt_message(encrypted_data)
             if not data:
                 print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
                 sock.close()
@@ -82,7 +84,7 @@ def main():
                 s.close()
                 break
             if msg:
-                s.send(msg.encode())
+                s.send(encrypt_message(msg))
         except Exception:
             print(f"\n{Fore.RED}Disconnected.{Style.RESET_ALL}")
             break

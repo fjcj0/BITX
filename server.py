@@ -1,6 +1,7 @@
 import socket, threading, os, random
 from colorama import Fore, init
 from datetime import datetime
+from crypto_chat import encrypt_message, decrypt_message
 from cryptography.fernet import Fernet
 init(autoreset=True)
 PORT = 5010
@@ -82,7 +83,7 @@ def broadcast_message(sender, message, is_user=True):
         formatted = f"[{timestamp}] [+] {sender}: {message}"
     for user, conn in clients.items():
         try:
-            conn.send(formatted.encode())
+            conn.send(encrypt_message(formatted))
         except:
             remove_client(user)
 def remove_client(username):
@@ -125,7 +126,7 @@ def handle_client(conn, addr):
             data = conn.recv(8192)
             if not data:
                 break
-            message = data.decode()
+            message = decrypt_message(data)
             broadcast_message(username, message, is_user=True)
     except Exception as e:
         print(f"Error with {addr}: {e}")
