@@ -95,9 +95,9 @@ def remove_client(username):
 def handle_client(conn, addr):
     try:
         conn.send("Enter your username:".encode())
-        username = conn.recv(1024).decode().strip()
+        username = decrypt_message(conn.recv(1024)).strip()
         conn.send("Enter your password:".encode())
-        password = conn.recv(1024).decode().strip()
+        password = decrypt_message(conn.recv(1024)).strip()
         if username in blocked_users or username == ADMIN_USERNAME:
             conn.send("Username blocked. Disconnecting...".encode())
             conn.close()

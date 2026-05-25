@@ -63,9 +63,9 @@ def main():
         print("Password must be at least 3 characters long.")
         return
     s.recv(1024)  
-    s.send(username.encode())
+    s.send(encrypt_message(username))
     s.recv(1024)  
-    s.send(password.encode())
+    s.send(encrypt_message(password))
     print("\nWaiting for admin approval... (you cannot chat until accepted)")
     while True:
         response = s.recv(1024).decode()
