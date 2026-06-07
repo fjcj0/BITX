@@ -1,11 +1,12 @@
 import os
-os.environ["TERM"] = "xterm-256color"
 import socks, threading
 from colorama import Fore, Style, init
 from crypto_chat import encrypt_message, decrypt_message
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.output.defaults import create_output
+from prompt_toolkit import print_formatted_text
+from prompt_toolkit.formatted_text import HTML
 import json
 init(autoreset=True)
 COLOR_MAP = {
@@ -18,7 +19,7 @@ COLOR_MAP = {
     "WHITE": Fore.WHITE
 }
 output = create_output()
-session = PromptSession(output=output)
+session = PromptSession()
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
 user_colors = {}
@@ -42,10 +43,10 @@ def receive_messages(sock):
                 sock.close()
                 break
             msg = json.loads(data)
-            print(
-                Fore.YELLOW + f"[{msg['time']}] [+] {msg['sender']}: "
-                + Fore.GREEN + f"{msg['message']}"
-                + Style.RESET_ALL
+            print_formatted_text(
+                HTML(f"<ansigreen>[{msg['time']}]</ansigreen> "
+                     f"<ansicyan>{msg['sender']}</ansicyan>: "
+                     f"{msg['message']}")
             )
         except Exception:
             print(Fore.RED + "\nDisconnected from server.")
@@ -71,9 +72,9 @@ def main():
     if len(password) < 3:
         print("Password must be at least 3 characters long.")
         return
-    s.recv(1024)  
+    s.recv(1024)
     s.send(encrypt_message(username))
-    s.recv(1024)  
+    s.recv(1024)
     s.send(encrypt_message(password))
     print("\nWaiting for admin approval... (you cannot chat until accepted)")
     while True:
@@ -86,17 +87,17 @@ def main():
             s.close()
             return
     threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
-    while True:
-        try:
-            with patch_stdout():
+    with patch_stdout():
+        while True:
+            try:
                 msg = session.prompt(f"{username} > ")
-            if msg.lower() == "/exit":
-                s.close()
+                if msg.lower() == "/exit":
+                    s.close()
+                    break
+                if msg:
+                    s.send(encrypt_message(msg))
+            except Exception:
+                print(f"\n{Fore.RED}Disconnected.{Style.RESET_ALL}")
                 break
-            if msg:
-                s.send(encrypt_message(msg))
-        except Exception:
-            print(f"\n{Fore.RED}Disconnected.{Style.RESET_ALL}")
-            break
 if __name__ == "__main__":
     main()
