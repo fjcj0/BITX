@@ -4,6 +4,7 @@ from datetime import datetime
 from crypto_chat import encrypt_message, decrypt_message
 from cryptography.fernet import Fernet
 import time
+import json
 init(autoreset=True)
 PORT = 5010
 HIDDEN_SERVICE_DIR = "./global_chat"
@@ -84,13 +85,22 @@ def verify_user(username, password):
         if row[0] == username and row[1] == password:
             return True
     return False
-def broadcast_message(sender, message, is_user=True):
+def broadcast_message(sender, message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     color = user_colors.get(sender, "WHITE")
-    formatted = f"[{timestamp}] [+] {sender}|{color}: {message}"
+
+    data = {
+        "time": timestamp,
+        "sender": sender,
+        "color": color,
+        "message": message
+    }
+
+    payload = json.dumps(data)
+
     for user, conn in list(clients.items()):
         try:
-            conn.send(encrypt_message(formatted))
+            conn.send(encrypt_message(payload))
         except:
             remove_client(user)
 def remove_client(username):
@@ -137,7 +147,7 @@ def handle_client(conn, addr):
             if not data:
                 break
             message = decrypt_message(data)
-            broadcast_message(username, message, is_user=True)
+            broadcast_message(username, message)
     except Exception as e:
         print(f"Error with {addr}: {e}")
     finally:

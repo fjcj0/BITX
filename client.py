@@ -1,8 +1,10 @@
-import socks, threading, random, sys
+import socks, threading
 from colorama import Fore, Style, init
 from crypto_chat import encrypt_message, decrypt_message
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
+import json
+init(autoreset=True)
 COLOR_MAP = {
     "RED": Fore.RED,
     "GREEN": Fore.GREEN,
@@ -13,7 +15,6 @@ COLOR_MAP = {
     "WHITE": Fore.WHITE
 }
 session = PromptSession()
-init(autoreset=True)
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
 user_colors = {}
@@ -27,7 +28,7 @@ def print_logo():
     print(Fore.RED + r"""
 BUILT BY: https://github.com/fjcj0
     """)
-def receive_messages(sock, my_username):
+def receive_messages(sock, username):
     while True:
         try:
             encrypted_data = sock.recv(8192)
@@ -36,19 +37,12 @@ def receive_messages(sock, my_username):
                 print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
                 sock.close()
                 break
-            if "[+]" in data and ":" in data:
-                parts = data.split(": ", 1)
-                header = parts[0]
-                msg_part = parts[1] if len(parts) > 1 else ""
-                time_part = header.split("]")[0] + "]"
-                rest = header.split("[+]")[1].strip()
-                username, color = rest.split("|")
-                color_code = COLOR_MAP.get(color, Fore.WHITE)
-                print(
-                    f"{color_code}{time_part} [+] {username}{Style.RESET_ALL}: "
-                    f"{Fore.CYAN}{msg_part}"
-                )
-                continue
+            msg = json.loads(data)
+            color_code = COLOR_MAP.get(msg["color"], Fore.WHITE)
+            print(
+                f"{color_code}[{msg['time']}] [+] {msg['sender']}: "
+                f"{Fore.CYAN}{msg['message']}{Style.RESET_ALL}"
+            )
         except Exception:
             print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
             sock.close()
