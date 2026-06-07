@@ -88,16 +88,13 @@ def verify_user(username, password):
 def broadcast_message(sender, message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     color = user_colors.get(sender, "WHITE")
-
     data = {
         "time": timestamp,
         "sender": sender,
         "color": color,
         "message": message
     }
-
     payload = json.dumps(data)
-
     for user, conn in list(clients.items()):
         try:
             conn.send(encrypt_message(payload))
@@ -110,7 +107,7 @@ def remove_client(username):
         except:
             pass
         del clients[username]
-        broadcast_message("Server", f"{username} has left the chat", is_user=False)
+        broadcast_message("Server", f"{username} has left the chat")
 def handle_client(conn, addr):
     username = None
     try:
@@ -140,7 +137,7 @@ def handle_client(conn, addr):
         clients[username] = conn
         user_colors[username] = random.choice(list(COLOR_MAP.keys()))
         save_user(username, password, "unblock")
-        broadcast_message("Server", f"{username} has joined the chat", is_user=False)
+        broadcast_message("Server", f"{username} has joined the chat")
         print(f"{username} connected from {addr}")
         while True:
             data = conn.recv(8192)
