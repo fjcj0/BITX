@@ -1,8 +1,11 @@
+import os
+os.environ["TERM"] = "xterm-256color"
 import socks, threading
 from colorama import Fore, Style, init
 from crypto_chat import encrypt_message, decrypt_message
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
+from prompt_toolkit.output.defaults import create_output
 import json
 init(autoreset=True)
 COLOR_MAP = {
@@ -14,7 +17,8 @@ COLOR_MAP = {
     "CYAN": Fore.CYAN,
     "WHITE": Fore.WHITE
 }
-session = PromptSession()
+output = create_output()
+session = PromptSession(output=output)
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
 user_colors = {}
@@ -85,9 +89,7 @@ def main():
     while True:
         try:
             with patch_stdout():
-                msg = session.prompt(
-                    f"{user_color}{username} > {Style.RESET_ALL}"
-                ).strip()
+                msg = session.prompt(f"{username} > ")
             if msg.lower() == "/exit":
                 s.close()
                 break
