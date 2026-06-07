@@ -44,8 +44,8 @@ def receive_messages(sock, username):
             msg = json.loads(data)
             color_code = COLOR_MAP.get(msg["color"], Fore.WHITE)
             print(
-                f"{color_code}[{msg['time']}] [+] {msg['sender']}: "
-                f"{Fore.CYAN}{msg['message']}{Style.RESET_ALL}"
+                f"{Fore.YELLOW}[{msg['time']}] [+] {msg['sender']}: "
+                f"{Fore.GREEN}{msg['message']}{Style.RESET_ALL}"
             )
         except Exception:
             print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
