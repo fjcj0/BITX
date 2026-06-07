@@ -1,51 +1,37 @@
-import os
-import socks, threading
-from colorama import Fore, Style, init
+import socks
+import threading
+import json
+from colorama import Fore, init
 from crypto_chat import encrypt_message, decrypt_message
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-from prompt_toolkit.output.defaults import create_output
-from prompt_toolkit import print_formatted_text
 from prompt_toolkit.formatted_text import HTML
-import json
+from prompt_toolkit import print_formatted_text
+from prompt_toolkit.application import run_in_terminal
 init(autoreset=True)
-COLOR_MAP = {
-    "RED": Fore.RED,
-    "GREEN": Fore.GREEN,
-    "YELLOW": Fore.YELLOW,
-    "BLUE": Fore.BLUE,
-    "MAGENTA": Fore.MAGENTA,
-    "CYAN": Fore.CYAN,
-    "WHITE": Fore.WHITE
-}
-output = create_output()
 session = PromptSession()
-user_color = Fore.GREEN
-other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
-user_colors = {}
 def print_logo():
     print(Fore.RED + r"""
  ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
 (  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
- ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
+ ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  (
 (____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
     """)
-    print(Fore.RED + r"""
-BUILT BY: https://github.com/fjcj0
-    """)
+    print(Fore.RED + "BUILT BY: https://github.com/fjcj0\n")
 def receive_messages(sock):
     while True:
         try:
             encrypted_data = sock.recv(8192)
-            data = decrypt_message(encrypted_data)
-            if not data:
-                print(Fore.RED + "\nDisconnected from server.")
+            if not encrypted_data:
+                run_in_terminal(lambda: print(Fore.RED + "\nDisconnected from server."))
                 sock.close()
                 break
+            data = decrypt_message(encrypted_data)
             msg = json.loads(data)
-            print(f"[{msg['time']}] {msg['sender']}: {msg['message']}")
+            text = f"[{msg['time']}] {msg['sender']}: {msg['message']}"
+            run_in_terminal(lambda: print(text))
         except Exception:
-            print(Fore.RED + "\nDisconnected from server.")
+            run_in_terminal(lambda: print(Fore.RED + "\nDisconnected from server."))
             sock.close()
             break
 def main():
@@ -57,7 +43,7 @@ def main():
     try:
         s.connect((server_onion, port))
     except Exception as e:
-        print(f"{Fore.RED}Failed to connect: {e}{Style.RESET_ALL}")
+        print(Fore.RED + f"Failed to connect: {e}")
         return
     while True:
         username = input("Enter your username: ").strip()
@@ -72,28 +58,30 @@ def main():
     s.send(encrypt_message(username))
     s.recv(1024)
     s.send(encrypt_message(password))
-    print("\nWaiting for admin approval... (you cannot chat until accepted)")
+    print("\nWaiting for admin approval...")
     while True:
         response = s.recv(1024).decode()
         if "accepted" in response.lower():
-            print(f"{Fore.GREEN}You have been accepted!{Style.RESET_ALL}")
+            print(Fore.GREEN + "You have been accepted!\n")
             break
         elif "rejected" in response.lower() or "blocked" in response.lower():
-            print(f"{Fore.RED}{response}{Style.RESET_ALL}")
+            print(Fore.RED + response)
             s.close()
             return
     threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
+    def get_prompt():
+        return "\n\n\n\n\n\n" + f"{username} > "
     with patch_stdout():
         while True:
             try:
-                msg = session.prompt(f"{username} > ")
+                msg = session.prompt(get_prompt())
                 if msg.lower() == "/exit":
                     s.close()
                     break
                 if msg:
                     s.send(encrypt_message(msg))
             except Exception:
-                print(f"\n{Fore.RED}Disconnected.{Style.RESET_ALL}")
+                print(Fore.RED + "\nDisconnected.")
                 break
 if __name__ == "__main__":
     main()
