@@ -1,95 +1,95 @@
 import socks
 import threading
 import json
-from colorama import Fore, init
+from colorama import init
 from crypto_chat import encrypt_message, decrypt_message
-from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
-from prompt_toolkit import print_formatted_text
+from prompt_toolkit.application import Application
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.layout.containers import HSplit
+from prompt_toolkit.widgets import TextArea, Frame
+from prompt_toolkit.key_binding import KeyBindings
 init(autoreset=True)
-session = PromptSession()
-def print_logo():
-    print(Fore.RED + r"""
- ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _
-(  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
- ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  (
-(____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
-    """)
-    print(Fore.RED + "BUILT BY: https://github.com/fjcj0\n")
+server = None
+username = ""
+chat_lines = []
+def add_message(text):
+    chat_lines.append(text)
+    if len(chat_lines) > 200:
+        chat_lines.pop(0)
+    chat_window.text = "\n".join(chat_lines)
 def receive_messages(sock):
     while True:
         try:
-            encrypted_data = sock.recv(8192)
-            if not encrypted_data:
-                print_formatted_text("\nDisconnected from server.")
-                sock.close()
-                break
-            data = decrypt_message(encrypted_data)
+            data = sock.recv(8192)
             if not data:
-                continue
-            msg = json.loads(data)
+                add_message("Disconnected from server.")
+                break
+            msg = json.loads(decrypt_message(data))
             text = f"[{msg['time']}] {msg['sender']}: {msg['message']}"
-            print_formatted_text(text)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print_formatted_text(f"ERROR: {e}")
-            sock.close()
+            add_message(text)
+        except Exception:
+            add_message("Connection error.")
             break
+def send_message(buf):
+    global server
+    msg = buf.text.strip()
+    if msg:
+        server.send(encrypt_message(msg))
+    buf.text = "" 
+chat_window = TextArea(
+    text="",
+    focusable=False,
+    scrollbar=True,
+    wrap_lines=True
+)
+input_field = TextArea(
+    height=1,
+    prompt="> ",
+    multiline=False
+)
+def on_enter(event):
+    send_message(input_field)
+kb = KeyBindings()
+kb.add("enter")(on_enter)
+root_container = HSplit([
+    Frame(chat_window, title="Chat"),
+    Frame(input_field, title="Input")
+])
+app = Application(
+    layout=Layout(root_container),
+    key_bindings=kb,
+    full_screen=True
+)
+def start_receiver(sock):
+    threading.Thread(
+        target=receive_messages,
+        args=(sock,),
+        daemon=True
+    ).start()
 def main():
-    print_logo()
-    server_onion = input("Enter server address: ").strip()
-    port = int(input("Enter server port: ").strip())
+    global server, username
+    server_onion = input("Server: ").strip()
+    port = int(input("Port: ").strip())
     s = socks.socksocket()
     s.set_proxy(socks.SOCKS5, "127.0.0.1", 9050)
-    try:
-        s.connect((server_onion, port))
-    except Exception as e:
-        print(f"{Fore.RED}Failed to connect: {e}")
-        return
-    while True:
-        username = input("Enter your username: ").strip()
-        if len(username) > 3:
-            break
-        print("Username must be more than 3 characters long.")
-    password = input("Enter your password: ").strip()
-    if len(password) < 3:
-        print("Password must be at least 3 characters long.")
-        return
+    s.connect((server_onion, port))
+    server = s
+    username = input("Username: ").strip()
+    password = input("Password: ").strip()
     s.recv(1024)
     s.send(encrypt_message(username))
     s.recv(1024)
     s.send(encrypt_message(password))
-    print("\nWaiting for admin approval...")
+    print("Waiting for approval...")
     while True:
-        response = s.recv(1024).decode()
-        if "accepted" in response.lower():
-            print(Fore.GREEN + "You have been accepted!")
+        resp = s.recv(1024).decode()
+        if "accepted" in resp.lower():
+            print("Accepted!")
             break
-        if "rejected" in response.lower() or "blocked" in response.lower():
-            print(Fore.RED + response)
-            s.close()
+        if "rejected" in resp.lower():
+            print("Rejected")
             return
-    threading.Thread(
-        target=receive_messages,
-        args=(s,),
-        daemon=True
-    ).start()
-    with patch_stdout():
-        while True:
-            try:
-                msg = session.prompt(f"\n\n\n{username} > ")
-                if msg.lower() == "/exit":
-                    s.close()
-                    break
-                if msg:
-                    s.send(encrypt_message(msg))
-            except KeyboardInterrupt:
-                continue
-            except EOFError:
-                break
-            except Exception as e:
-                print(f"\n{Fore.RED}Disconnected: {e}")
-                break
+    start_receiver(s)
+    app.run()
 if __name__ == "__main__":
     main()
