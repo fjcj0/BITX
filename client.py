@@ -1,6 +1,18 @@
 import socks, threading, random, sys
 from colorama import Fore, Style, init
 from crypto_chat import encrypt_message, decrypt_message
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
+COLOR_MAP = {
+    "RED": Fore.RED,
+    "GREEN": Fore.GREEN,
+    "YELLOW": Fore.YELLOW,
+    "BLUE": Fore.BLUE,
+    "MAGENTA": Fore.MAGENTA,
+    "CYAN": Fore.CYAN,
+    "WHITE": Fore.WHITE
+}
+session = PromptSession()
 init(autoreset=True)
 user_color = Fore.GREEN
 other_colors = [Fore.RED, Fore.BLUE, Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.WHITE]
@@ -24,20 +36,19 @@ def receive_messages(sock, my_username):
                 print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
                 sock.close()
                 break
-            if data.startswith("[+]"):
-                parts = data.split(":", 1)
-                if len(parts) == 2:
-                    user_part, msg_part = parts
-                    username = user_part.replace("[+]", "").strip()
-                    if username != my_username and username not in user_colors:
-                        user_colors[username] = random.choice(other_colors)
-                    color = user_colors.get(username, Fore.WHITE)
-                    sys.stdout.write(f"\r{color}[+] {username}{Style.RESET_ALL}: {Fore.CYAN}{msg_part.strip()}{Style.RESET_ALL}\n")
-                    sys.stdout.write(f"{user_color}{my_username} > {Style.RESET_ALL}")
-                    sys.stdout.flush()
-                    continue
-            sys.stdout.write(f"\r{data}\n{user_color}{my_username} > {Style.RESET_ALL}")
-            sys.stdout.flush()
+            if "[+]" in data and ":" in data:
+                parts = data.split(": ", 1)
+                header = parts[0]
+                msg_part = parts[1] if len(parts) > 1 else ""
+                time_part = header.split("]")[0] + "]"
+                rest = header.split("[+]")[1].strip()
+                username, color = rest.split("|")
+                color_code = COLOR_MAP.get(color, Fore.WHITE)
+                print(
+                    f"{color_code}{time_part} [+] {username}{Style.RESET_ALL}: "
+                    f"{Fore.CYAN}{msg_part}"
+                )
+                continue
         except Exception:
             print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
             sock.close()
@@ -79,7 +90,10 @@ def main():
     threading.Thread(target=receive_messages, args=(s, username), daemon=True).start()
     while True:
         try:
-            msg = input(f"{user_color}{username} > {Style.RESET_ALL}").strip()
+            with patch_stdout():
+                msg = session.prompt(
+                    f"{user_color}{username} > {Style.RESET_ALL}"
+                ).strip()
             if msg.lower() == "/exit":
                 s.close()
                 break

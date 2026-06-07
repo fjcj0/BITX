@@ -13,7 +13,15 @@ KEY_FILE = os.path.join(HIDDEN_SERVICE_DIR, "secret.key")
 clients = {}  
 blocked_users = set()
 pending_users = []
-COLORS = [Fore.RED, Fore.GREEN, Fore.YELLOW, Fore.BLUE, Fore.MAGENTA, Fore.CYAN, Fore.WHITE]
+COLOR_MAP = {
+    "RED": Fore.RED,
+    "GREEN": Fore.GREEN,
+    "YELLOW": Fore.YELLOW,
+    "BLUE": Fore.BLUE,
+    "MAGENTA": Fore.MAGENTA,
+    "CYAN": Fore.CYAN,
+    "WHITE": Fore.WHITE
+}
 user_colors = {}
 def print_logo():
     print(Fore.RED + r"""
@@ -78,22 +86,23 @@ def verify_user(username, password):
     return False
 def broadcast_message(sender, message, is_user=True):
     timestamp = datetime.now().strftime("%H:%M:%S")
-    if is_user:
-        formatted = f"[{timestamp}] [+] {sender}: {message}"
-    else:
-        formatted = f"[{timestamp}] [+] {sender}: {message}"
-    for user, conn in clients.items():
+    color = user_colors.get(sender, "WHITE")
+    formatted = f"[{timestamp}] [+] {sender}|{color}: {message}"
+    for user, conn in list(clients.items()):
         try:
             conn.send(encrypt_message(formatted))
         except:
             remove_client(user)
 def remove_client(username):
     if username in clients:
-        try: clients[username].close()
-        except: pass
+        try:
+            clients[username].close()
+        except:
+            pass
         del clients[username]
         broadcast_message("Server", f"{username} has left the chat", is_user=False)
 def handle_client(conn, addr):
+    username = None
     try:
         conn.send("Enter your username:".encode())
         username = decrypt_message(conn.recv(1024)).strip()
@@ -119,7 +128,7 @@ def handle_client(conn, addr):
         while (username, conn, password) in pending_users:
             time.sleep(0.5)
         clients[username] = conn
-        user_colors[username] = random.choice(COLORS)
+        user_colors[username] = random.choice(list(COLOR_MAP.keys()))
         save_user(username, password, "unblock")
         broadcast_message("Server", f"{username} has joined the chat", is_user=False)
         print(f"{username} connected from {addr}")
@@ -132,7 +141,9 @@ def handle_client(conn, addr):
     except Exception as e:
         print(f"Error with {addr}: {e}")
     finally:
-        remove_client(username)
+        if username:
+            remove_client(username)
+        conn.close()
 def admin_interface():
     print_logo()
     while True:
