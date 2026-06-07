@@ -32,7 +32,7 @@ def print_logo():
     print(Fore.RED + r"""
 BUILT BY: https://github.com/fjcj0
     """)
-def receive_messages(sock, username):
+def receive_messages(sock):
     while True:
         try:
             encrypted_data = sock.recv(8192)
@@ -42,10 +42,10 @@ def receive_messages(sock, username):
                 sock.close()
                 break
             msg = json.loads(data)
-            color_code = COLOR_MAP.get(msg["color"], Fore.WHITE)
             print(
-                f"{Fore.YELLOW}[{msg['time']}] [+] {msg['sender']}: "
-                f"{Fore.GREEN}{msg['message']}{Style.RESET_ALL}"
+                f"""{Fore.YELLOW}[{msg['time']}] [+] {msg['sender']}: {Style.RESET_ALL}
+                    {Fore.GREEN}{msg['message']}{Style.RESET_ALL}                    
+                """
             )
         except Exception:
             print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
@@ -85,7 +85,7 @@ def main():
             print(f"{Fore.RED}{response}{Style.RESET_ALL}")
             s.close()
             return
-    threading.Thread(target=receive_messages, args=(s, username), daemon=True).start()
+    threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
     while True:
         try:
             with patch_stdout():
