@@ -38,17 +38,17 @@ def receive_messages(sock):
             encrypted_data = sock.recv(8192)
             data = decrypt_message(encrypted_data)
             if not data:
-                print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
+                print(Fore.RED + "\nDisconnected from server.")
                 sock.close()
                 break
             msg = json.loads(data)
             print(
-                f"""{Fore.YELLOW}[{msg['time']}] [+] {msg['sender']}: {Style.RESET_ALL}
-                    {Fore.GREEN}{msg['message']}{Style.RESET_ALL}                    
-                """
+                Fore.YELLOW + f"[{msg['time']}] [+] {msg['sender']}: "
+                + Fore.GREEN + f"{msg['message']}"
+                + Style.RESET_ALL
             )
         except Exception:
-            print(f"\n{Fore.RED}Disconnected from server.{Style.RESET_ALL}")
+            print(Fore.RED + "\nDisconnected from server.")
             sock.close()
             break
 def main():
