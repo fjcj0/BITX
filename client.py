@@ -43,11 +43,7 @@ def receive_messages(sock):
                 sock.close()
                 break
             msg = json.loads(data)
-            print_formatted_text(
-                HTML(f"<ansigreen>[{msg['time']}]</ansigreen> "
-                     f"<ansicyan>{msg['sender']}</ansicyan>: "
-                     f"{msg['message']}")
-            )
+            print(f"[{msg['time']}] {msg['sender']}: {msg['message']}")
         except Exception:
             print(Fore.RED + "\nDisconnected from server.")
             sock.close()
