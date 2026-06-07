@@ -5,14 +5,12 @@ from colorama import Fore, init
 from crypto_chat import encrypt_message, decrypt_message
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit import print_formatted_text
-from prompt_toolkit.application import run_in_terminal
 init(autoreset=True)
 session = PromptSession()
 def print_logo():
     print(Fore.RED + r"""
- ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
+ ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _
 (  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
  ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  (
 (____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
@@ -23,15 +21,19 @@ def receive_messages(sock):
         try:
             encrypted_data = sock.recv(8192)
             if not encrypted_data:
-                run_in_terminal(lambda: print(Fore.RED + "\nDisconnected from server."))
+                print_formatted_text("\nDisconnected from server.")
                 sock.close()
                 break
             data = decrypt_message(encrypted_data)
+            if not data:
+                continue
             msg = json.loads(data)
             text = f"[{msg['time']}] {msg['sender']}: {msg['message']}"
-            run_in_terminal(lambda: print(text))
-        except Exception:
-            run_in_terminal(lambda: print(Fore.RED + "\nDisconnected from server."))
+            print_formatted_text(text)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print_formatted_text(f"ERROR: {e}")
             sock.close()
             break
 def main():
@@ -43,7 +45,7 @@ def main():
     try:
         s.connect((server_onion, port))
     except Exception as e:
-        print(Fore.RED + f"Failed to connect: {e}")
+        print(f"{Fore.RED}Failed to connect: {e}")
         return
     while True:
         username = input("Enter your username: ").strip()
@@ -62,26 +64,32 @@ def main():
     while True:
         response = s.recv(1024).decode()
         if "accepted" in response.lower():
-            print(Fore.GREEN + "You have been accepted!\n")
+            print(Fore.GREEN + "You have been accepted!")
             break
-        elif "rejected" in response.lower() or "blocked" in response.lower():
+        if "rejected" in response.lower() or "blocked" in response.lower():
             print(Fore.RED + response)
             s.close()
             return
-    threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
-    def get_prompt():
-        return "\n\n\n\n\n\n" + f"{username} > "
+    threading.Thread(
+        target=receive_messages,
+        args=(s,),
+        daemon=True
+    ).start()
     with patch_stdout():
         while True:
             try:
-                msg = session.prompt(get_prompt())
+                msg = session.prompt(f"\n\n\n{username} > ")
                 if msg.lower() == "/exit":
                     s.close()
                     break
                 if msg:
                     s.send(encrypt_message(msg))
-            except Exception:
-                print(Fore.RED + "\nDisconnected.")
+            except KeyboardInterrupt:
+                continue
+            except EOFError:
+                break
+            except Exception as e:
+                print(f"\n{Fore.RED}Disconnected: {e}")
                 break
 if __name__ == "__main__":
     main()
