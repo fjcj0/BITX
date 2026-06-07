@@ -52,8 +52,8 @@ def on_enter(event):
 kb = KeyBindings()
 kb.add("enter")(on_enter)
 root_container = HSplit([
-    Frame(chat_window, title="Chat"),
-    Frame(input_field, title="Input")
+    Frame(chat_window, title="BITX CHAT"),
+    Frame(input_field)
 ])
 app = Application(
     layout=Layout(root_container),
