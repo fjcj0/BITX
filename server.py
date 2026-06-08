@@ -9,8 +9,6 @@ from crypto_chat import encrypt_message, decrypt_message
 init(autoreset=True)
 PORT = 5010
 HOST = "127.0.0.1"
-HIDDEN_DIR = "./global_chat"
-USERS_FILE = os.path.join(HIDDEN_DIR, "users_status.enc")
 clients = {}
 pending_users = []  
 blocked_users = set()
