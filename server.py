@@ -1,24 +1,22 @@
-import socket, threading, os, random
-from colorama import Fore, init
-from datetime import datetime
-from crypto_chat import encrypt_message, decrypt_message
-from cryptography.fernet import Fernet
-import time
+import socket
+import threading
+import os
+import random
 import json
-from prompt_toolkit.application import Application
-from prompt_toolkit.layout import Layout, HSplit, VSplit
-from prompt_toolkit.widgets import TextArea, Frame, Box
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout.containers import DynamicContainer
+import time
+from datetime import datetime
+from colorama import Fore, init
+from crypto_chat import encrypt_message, decrypt_message
 init(autoreset=True)
 PORT = 5010
-HIDDEN_SERVICE_DIR = "./global_chat"
-ADMIN_USERNAME = "admin"
-USERS_FILE = os.path.join(HIDDEN_SERVICE_DIR, "users_status.enc")
-KEY_FILE = os.path.join(HIDDEN_SERVICE_DIR, "secret.key")
-clients = {}  
-blocked_users = set()
+HOST = "127.0.0.1"
+HIDDEN_DIR = "./global_chat"
+USERS_FILE = os.path.join(HIDDEN_DIR, "users_status.enc")
+clients = {}
 pending_users = []
+blocked_users = set()
+user_colors = {}
+ADMIN_USERNAME = "admin"
 COLOR_MAP = {
     "RED": Fore.RED,
     "GREEN": Fore.GREEN,
@@ -28,78 +26,49 @@ COLOR_MAP = {
     "CYAN": Fore.CYAN,
     "WHITE": Fore.WHITE
 }
-user_colors = {}
-def print_logo():
-    print(Fore.RED + r"""
- ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
-(  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
- ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
-(____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
-    """)
-    print(Fore.RED + r"""
-BUILT BY: https://github.com/fjcj0
-    """)
-def generate_key():
-    if not os.path.exists(KEY_FILE):
-        os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
-        key = Fernet.generate_key()
-        with open(KEY_FILE, "wb") as f:
-            f.write(key)
-def load_key():
-    with open(KEY_FILE, "rb") as f:
-        return f.read()
-generate_key()
-fernet = Fernet(load_key())
 def load_users():
+    os.makedirs(HIDDEN_DIR, exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
-        with open(USERS_FILE, "wb") as f:
-            f.write(b"")
+        return []
+    data = open(USERS_FILE, "rb").read()
+    if not data:
+        return []
+    try:
+        decrypted = decrypt_message(data)
+    except:
+        return []
     rows = []
-    with open(USERS_FILE, "rb") as f:
-        data = f.read()
-        if data:
-            decrypted = fernet.decrypt(data).decode()
-            for line in decrypted.splitlines():
-                parts = line.strip().split(",")
-                if len(parts) == 3:  
-                    if parts[2] == "block":
-                        blocked_users.add(parts[0])
-                    rows.append(parts)
+    for line in decrypted.splitlines():
+        parts = line.split(",")
+        if len(parts) == 3:
+            if parts[2] == "block":
+                blocked_users.add(parts[0])
+            rows.append(parts)
     return rows
 def save_users(rows):
-    data = "\n".join([",".join(row) for row in rows])
-    encrypted = fernet.encrypt(data.encode())
+    os.makedirs(HIDDEN_DIR, exist_ok=True)
+    data = "\n".join([",".join(r) for r in rows])
+    encrypted = encrypt_message(data)
     with open(USERS_FILE, "wb") as f:
         f.write(encrypted)
 def save_user(username, password, status):
     rows = load_users()
-    found = False
-    for row in rows:
-        if row[0] == username:
-            row[1] = password
-            row[2] = status
-            found = True
+    for r in rows:
+        if r[0] == username:
+            r[1] = password
+            r[2] = status
             break
-    if not found:
+    else:
         rows.append([username, password, status])
     save_users(rows)
 def verify_user(username, password):
-    rows = load_users()
-    for row in rows:
-        if row[0] == username and row[1] == password:
-            return True
-    return False
-def broadcast_message(sender, message):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    color = user_colors.get(sender, "WHITE")
-    data = {
-        "time": timestamp,
+    return any(r[0] == username and r[1] == password for r in load_users())
+def broadcast(sender, message):
+    payload = json.dumps({
+        "time": datetime.now().strftime("%H:%M:%S"),
         "sender": sender,
-        "color": color,
         "message": message
-    }
-    payload = json.dumps(data)
+    })
     for user, conn in list(clients.items()):
         try:
             conn.send(encrypt_message(payload))
@@ -111,202 +80,112 @@ def remove_client(username):
             clients[username].close()
         except:
             pass
-        del clients[username]
-        broadcast_message("Server", f"{username} has left the chat")
+        clients.pop(username, None)
+        broadcast("Server", f"{username} left chat")
 def handle_client(conn, addr):
     username = None
     try:
-        conn.send("Enter your username:".encode())
-        username = decrypt_message(conn.recv(1024)).strip()
-        conn.send("Enter your password:".encode())
-        password = decrypt_message(conn.recv(1024)).strip()
-        if username in blocked_users or username == ADMIN_USERNAME:
-            conn.send("Username blocked. Disconnecting...".encode())
+        conn.send(b"username")
+        username = decrypt_message(conn.recv(4096)).strip()
+        conn.send(b"password")
+        password = decrypt_message(conn.recv(4096)).strip()
+        if username in blocked_users:
+            conn.send(b"blocked")
             conn.close()
             return
-        if username in clients or any(u==username for u,_ in pending_users):
-            conn.send("Username already connected. Disconnecting...".encode())
+        if username in clients:
+            conn.send(b"exists")
+            conn.close()
+            return
+        if any(u[0] == username for u in pending_users):
+            conn.send(b"pending")
             conn.close()
             return
         rows = load_users()
-        user_exist = any(row[0]==username for row in rows)
-        if user_exist:
+        if any(r[0] == username for r in rows):
             if not verify_user(username, password):
-                conn.send("Incorrect password. Disconnecting...".encode())
+                conn.send(b"wrong")
                 conn.close()
                 return
         pending_users.append((username, conn, password))
-        print(f"New user pending approval: {username}")
+        print(f"[PENDING] {username}")
         while (username, conn, password) in pending_users:
-            time.sleep(0.5)
+            time.sleep(0.3)
         clients[username] = conn
         user_colors[username] = random.choice(list(COLOR_MAP.keys()))
         save_user(username, password, "unblock")
-        broadcast_message("Server", f"{username} has joined the chat")
-        print(f"{username} connected from {addr}")
+        broadcast("Server", f"{username} joined chat")
         while True:
             data = conn.recv(8192)
             if not data:
                 break
-            message = decrypt_message(data)
-            broadcast_message(username, message)
+            msg = decrypt_message(data)
+            broadcast(username, msg)
     except Exception as e:
-        print(f"Error with {addr}: {e}")
+        print("Error:", e)
     finally:
         if username:
             remove_client(username)
         conn.close()
 def admin_interface():
-    print_logo()
-    menu_options = [
-        "Accept pending users",
-        "Show connected users",
-        "Block a user",
-        "Exit"
-    ]
-    selected_index = [0]
-    screen = TextArea(text="", focusable=False)
-    def render_menu():
-        out = "\n".join(
-            [
-                f"> {opt}" if i == selected_index[0] else f"  {opt}"
-                for i, opt in enumerate(menu_options)
-            ]
-        )
-        screen.text = out
-    render_menu()
-    kb = KeyBindings()
-    @kb.add("up")
-    def up(event):
-        selected_index[0] = (selected_index[0] - 1) % len(menu_options)
-        render_menu()
-    @kb.add("down")
-    def down(event):
-        selected_index[0] = (selected_index[0] + 1) % len(menu_options)
-        render_menu()
-    def confirm_dialog(title, items):
-        idx = [0]
-        box = TextArea(text="", focusable=False)
-        def draw():
-            box.text = f"{title}\n\n" + "   ".join(
-                ["[ YES ]" if idx[0] == 0 else "  YES  ",
-                 "[ NO ]" if idx[0] == 1 else "  NO  "]
-            )
-        draw()
-        def run():
-            app2 = Application(
-                layout=Layout(Frame(box)),
-                key_bindings=kb2,
-                full_screen=True
-            )
-            app2.run()
-        kb2 = KeyBindings()
-        @kb2.add("left")
-        def left(event):
-            idx[0] = 0
-            draw()
-        @kb2.add("right")
-        def right(event):
-            idx[0] = 1
-            draw()
-        result = {"value": None}
-        @kb2.add("enter")
-        def enter(event):
-            result["value"] = (idx[0] == 0)
-            event.app.exit()
-        app2 = Application(
-            layout=Layout(Frame(box)),
-            key_bindings=kb2,
-            full_screen=True
-        )
-        app2.run()
-        return result["value"]
-    def select_user(title, user_list):
-        idx = [0]
-        box = TextArea(text="", focusable=False)
-        def draw():
-            if not user_list:
-                box.text = "No users available"
-                return
-            box.text = title + "\n\n" + "\n".join(
-                [
-                    f"> {u}" if i == idx[0] else f"  {u}"
-                    for i, u in enumerate(user_list)
-                ]
-            )
-        draw()
-        result = {"value": None}
-        kb2 = KeyBindings()
-        @kb2.add("up")
-        def up(event):
-            if user_list:
-                idx[0] = (idx[0] - 1) % len(user_list)
-                draw()
-        @kb2.add("down")
-        def down(event):
-            if user_list:
-                idx[0] = (idx[0] + 1) % len(user_list)
-                draw()
-        @kb2.add("enter")
-        def enter(event):
-            if user_list:
-                result["value"] = user_list[idx[0]]
-            event.app.exit()
-        app2 = Application(
-            layout=Layout(Frame(box)),
-            key_bindings=kb2,
-            full_screen=True
-        )
-        app2.run()
-        return result["value"]
-    @kb.add("enter")
-    def enter(event):
-        choice = menu_options[selected_index[0]]
-        if choice == "Accept pending users":
-            while pending_users:
-                users = [u[0] for u in pending_users]
-                user = select_user("Pending Users", users)
-                if not user:
-                    break
-                if confirm_dialog(f"Accept {user}?", ["YES", "NO"]):
-                    for item in pending_users:
-                        if item[0] == user:
-                            pending_users.remove(item)
-                            item[1].send("accepted".encode())
-                            save_user(item[0], item[2], "unblock")
-                            break
-                else:
-                    for item in pending_users:
-                        if item[0] == user:
-                            pending_users.remove(item)
-                            item[1].send("rejected".encode())
-                            item[1].close()
-                            save_user(item[0], item[2], "block")
-                            break
-        elif choice == "Show connected users":
-            users = list(clients.keys())
-            select_user("Connected Users (Live)", users)
-        elif choice == "Block a user":
-            users = list(clients.keys())
-            user = select_user("Block User", users)
-            if user and confirm_dialog(f"Block {user}?", ["YES", "NO"]):
-                save_user(user, "dummy", "block")
-                blocked_users.add(user)
-                remove_client(user)
-        elif choice == "Exit":
-            event.app.exit()
-    app = Application(
-        layout=Layout(Frame(screen, title="ADMIN PANEL")),
-        key_bindings=kb,
-        full_screen=True
-    )
-    app.run()
-os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
+    while True:
+        print("1. Show pending users")
+        print("2. Accept user")
+        print("3. Reject user")
+        print("4. Connected users")
+        print("5. Block user")
+        print("6. Exit")
+        choice = input("> ").strip()
+        if choice == "1":
+            if not pending_users:
+                print("No pending users")
+            else:
+                for i, (u, _, _) in enumerate(pending_users):
+                    print(f"{i+1}. {u}")
+        elif choice == "2":
+            if not pending_users:
+                print("No pending users")
+                continue
+            for i, (u, _, _) in enumerate(pending_users):
+                print(f"{i+1}. {u}")
+            idx = int(input("Select user: ")) - 1
+            if 0 <= idx < len(pending_users):
+                u, conn, p = pending_users.pop(idx)
+                conn.send(b"accepted")
+                print(f"[+] Accepted {u}")
+        elif choice == "3":
+            if not pending_users:
+                print("No pending users")
+                continue
+            for i, (u, _, _) in enumerate(pending_users):
+                print(f"{i+1}. {u}")
+            idx = int(input("Select user: ")) - 1
+            if 0 <= idx < len(pending_users):
+                u, conn, p = pending_users.pop(idx)
+                conn.send(b"rejected")
+                conn.close()
+                save_user(u, p, "block")
+                print(f"[-] Rejected {u}")
+        elif choice == "4":
+            if not clients:
+                print("No connected users")
+            else:
+                for u in clients:
+                    print("✔", u)
+        elif choice == "5":
+            u = input("User to block: ").strip()
+            blocked_users.add(u)
+            save_user(u, "x", "block")
+            if u in clients:
+                remove_client(u)
+            print(f"Blocked {u}")
+        elif choice == "6":
+            break
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(("127.0.0.1", PORT))
+server.bind((HOST, PORT))
 server.listen()
-print(f"Server running on 127.0.0.1:{PORT}")
+print(f"Server running on {HOST}:{PORT}")
 threading.Thread(target=admin_interface, daemon=True).start()
 while True:
     conn, addr = server.accept()
-    threading.Thread(target=handle_client, args=(conn, addr)).start()
+    threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
