@@ -159,7 +159,7 @@ def admin_interface():
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
                 u, conn, p = pending_users.pop(idx)
-                conn.send(b"accepted")
+                conn.send(encrypt_message("accepted"))
                 print(f"[+] Accepted {u}")
         elif choice == "3":
             if not pending_users:
@@ -170,7 +170,7 @@ def admin_interface():
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
                 u, conn, p = pending_users.pop(idx)
-                conn.send(b"rejected")
+                conn.send(encrypt_message("rejected"))
                 conn.close()
                 save_user(u, p, "block")
                 print(f"[-] Rejected {u}")
