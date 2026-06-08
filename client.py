@@ -8,6 +8,7 @@ from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.widgets import TextArea, Frame
 from prompt_toolkit.key_binding import KeyBindings
+import os
 init(autoreset=True)
 server = None
 username = ""
@@ -33,6 +34,14 @@ def receive_messages(sock):
 def send_message(buf):
     global server
     msg = buf.text.strip()
+    if msg == "/exit":
+        try:
+            print("Exiting chat...")
+            server.close()
+        except:
+            pass
+        os._exit(0)
+        return
     if msg:
         server.send(encrypt_message(msg))
     buf.text = "" 
