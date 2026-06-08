@@ -82,7 +82,7 @@ def main():
     s.send(encrypt_message(password))
     print("Waiting for approval...")
     while True:
-        resp = s.recv(1024).decode()
+        resp = decrypt_message(s.recv(1024))
         if "accepted" in resp.lower():
             print("Accepted!")
             break
