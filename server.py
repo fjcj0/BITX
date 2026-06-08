@@ -26,6 +26,14 @@ COLOR_MAP = {
     "CYAN": Fore.CYAN,
     "WHITE": Fore.WHITE
 }
+def print_logo():
+    print(Fore.RED + r"""
+ ____  ____  ____  _  _    ____  ____    __    ___  _____  _  _ 
+(  _ \(_  _)(_  _)( \/ )  (  _ \(  _ \  /__\  / __)(  _  )( \( )
+ ) _ < _)(_   )(   )  (    )(_) ))   / /(__)\( (_-. )(_)(  )  ( 
+(____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
+    """)
+    print(Fore.RED + "BUILT BY: https://github.com/fjcj0\n")
 def load_users():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
     if not os.path.exists(USERS_FILE):
@@ -184,6 +192,7 @@ def admin_interface():
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
 server.listen()
+print_logo()
 print(f"Server running on {HOST}:{PORT}")
 threading.Thread(target=admin_interface, daemon=True).start()
 while True:
