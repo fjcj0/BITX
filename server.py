@@ -10,7 +10,7 @@ init(autoreset=True)
 PORT = 5010
 HOST = "127.0.0.1"
 clients = {}
-pending_users = []  
+pending_users = []
 blocked_users = set()
 user_colors = {}
 COLOR_MAP = {
@@ -37,6 +37,8 @@ def broadcast(sender, message):
         "message": message
     })
     for user, conn in list(clients.items()):
+        if user in blocked_users:
+            continue
         try:
             conn.send(encrypt_message(payload))
         except:
@@ -54,22 +56,34 @@ def handle_client(conn, addr):
     try:
         conn.send(b"username")
         username = decrypt_message(conn.recv(4096)).strip()
+        if username in blocked_users:
+            conn.send(encrypt_message("blocked"))
+            conn.close()
+            return
         conn.send(b"password")
         password = decrypt_message(conn.recv(4096)).strip()
         if username in blocked_users:
-            conn.send(b"blocked")
+            conn.send(encrypt_message("blocked"))
             conn.close()
             return
         if username in clients:
-            conn.send(b"exists")
+            conn.send(encrypt_message("exists"))
             conn.close()
             return
         approved = threading.Event()
         status = {"value": "pending"}
+        if username in blocked_users:
+            conn.send(encrypt_message("blocked"))
+            conn.close()
+            return
         pending_users.append((username, conn, password, approved, status))
         print(f"[PENDING] {username}")
         approved.wait()
         if status["value"] == "rejected":
+            conn.close()
+            return
+        if username in blocked_users:
+            conn.send(encrypt_message("blocked"))
             conn.close()
             return
         clients[username] = conn
@@ -80,6 +94,9 @@ def handle_client(conn, addr):
             if not data:
                 break
             msg = decrypt_message(data)
+            if username in blocked_users:
+                conn.send(encrypt_message("blocked"))
+                break
             broadcast(username, msg)
     except Exception as e:
         print("Error:", e)
@@ -100,38 +117,30 @@ def admin_interface():
             if not pending_users:
                 print("No pending users")
             else:
-                for i, (u, _, _, _, _) in enumerate(pending_users):
+                for i, (u, *_ ) in enumerate(pending_users):
                     print(f"{i+1}. {u}")
         elif choice == "2":
-            if not pending_users:
-                print("No pending users")
-                continue
-            for i, (u, _, _, _, _) in enumerate(pending_users):
+            for i, (u, *_ ) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
                 u, conn, p, approved, status = pending_users.pop(idx)
+                if u in blocked_users:
+                    conn.send(encrypt_message("blocked"))
+                    approved.set()
+                    return
                 status["value"] = "accepted"
-                try:
-                    conn.send(encrypt_message("accepted"))
-                except:
-                    pass
+                conn.send(encrypt_message("accepted"))
                 approved.set()
                 print(f"[+] Accepted {u}")
         elif choice == "3":
-            if not pending_users:
-                print("No pending users")
-                continue
-            for i, (u, _, _, _, _) in enumerate(pending_users):
+            for i, (u, *_ ) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
                 u, conn, p, approved, status = pending_users.pop(idx)
                 status["value"] = "rejected"
-                try:
-                    conn.send(encrypt_message("rejected"))
-                except:
-                    pass
+                conn.send(encrypt_message("rejected"))
                 approved.set()
                 print(f"[-] Rejected {u}")
         elif choice == "4":
@@ -144,16 +153,25 @@ def admin_interface():
             u = input("User to block: ").strip()
             blocked_users.add(u)
             if u in clients:
+                try:
+                    clients[u].send(encrypt_message("blocked"))
+                except:
+                    pass
                 remove_client(u)
+            for i, (pu, conn, p, approved, status) in enumerate(pending_users):
+                if pu == u:
+                    try:
+                        conn.send(encrypt_message("blocked"))
+                    except:
+                        pass
+                    status["value"] = "rejected"
+                    approved.set()
+                    pending_users.pop(i)
+                    break
             print(f"[BLOCKED] {u}")
         elif choice == "6":
-            try:
-                print("stop server...")
-                server.close()
-                os._exit(0)
-            except:
-                pass
-            return
+            print("Stopping server...")
+            os._exit(0)
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
 server.listen()
