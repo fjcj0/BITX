@@ -149,7 +149,13 @@ def admin_interface():
                 remove_client(u)
             print(f"[BLOCKED] {u}")
         elif choice == "6":
-            break
+            try:
+                print("stop server...")
+                server.close()
+                os._exit(0)
+            except:
+                pass
+            return
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
 server.listen()
