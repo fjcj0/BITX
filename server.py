@@ -32,42 +32,6 @@ def print_logo():
 (____/(____) (__) (_/\_)  (____/(_)\_)(__)(__)\___/(_____)(_)\_)
     """)
     print(Fore.RED + "BUILT BY: https://github.com/fjcj0\n")
-def load_users():
-    os.makedirs(HIDDEN_DIR, exist_ok=True)
-    if not os.path.exists(USERS_FILE):
-        return []
-    data = open(USERS_FILE, "rb").read()
-    if not data:
-        return []
-    try:
-        decrypted = decrypt_message(data)
-    except:
-        return []
-    rows = []
-    for line in decrypted.splitlines():
-        parts = line.split(",")
-        if len(parts) == 3:
-            if parts[2] == "block":
-                blocked_users.add(parts[0])
-            rows.append(parts)
-    return rows
-def save_users(rows):
-    os.makedirs(HIDDEN_DIR, exist_ok=True)
-    data = "\n".join([",".join(r) for r in rows])
-    encrypted = encrypt_message(data)
-    with open(USERS_FILE, "wb") as f:
-        f.write(encrypted)
-def save_user(username, password, status):
-    rows = load_users()
-    for r in rows:
-        if r[0] == username:
-            r[1], r[2] = password, status
-            break
-    else:
-        rows.append([username, password, status])
-    save_users(rows)
-def verify_user(username, password):
-    return any(r[0] == username and r[1] == password for r in load_users())
 def broadcast(sender, message):
     payload = json.dumps({
         "time": datetime.now().strftime("%H:%M:%S"),
@@ -103,15 +67,15 @@ def handle_client(conn, addr):
             conn.close()
             return
         approved = threading.Event()
-        pending_users.append((username, conn, password, approved))
+        status = {"value": "pending"}
+        pending_users.append((username, conn, password, approved, status))
         print(f"[PENDING] {username}")
-        approved.wait() 
-        if username in blocked_users:
+        approved.wait()
+        if status["value"] == "rejected":
             conn.close()
             return
         clients[username] = conn
         user_colors[username] = random.choice(list(COLOR_MAP.keys()))
-        save_user(username, password, "unblock")
         broadcast("Server", f"{username} joined chat")
         while True:
             data = conn.recv(8192)
@@ -138,39 +102,39 @@ def admin_interface():
             if not pending_users:
                 print("No pending users")
             else:
-                for i, (u, _, _, _) in enumerate(pending_users):
+                for i, (u, _, _, _, _) in enumerate(pending_users):
                     print(f"{i+1}. {u}")
         elif choice == "2":
             if not pending_users:
                 print("No pending users")
                 continue
-            for i, (u, _, _, _) in enumerate(pending_users):
+            for i, (u, _, _, _, _) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
-                u, conn, p, approved = pending_users.pop(idx)
+                u, conn, p, approved, status = pending_users.pop(idx)
+                status["value"] = "accepted"
                 try:
                     conn.send(encrypt_message("accepted"))
                 except:
                     pass
-                approved.set() 
+                approved.set()
                 print(f"[+] Accepted {u}")
         elif choice == "3":
             if not pending_users:
                 print("No pending users")
                 continue
-            for i, (u, _, _, _) in enumerate(pending_users):
+            for i, (u, _, _, _, _) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
-                u, conn, p, approved = pending_users.pop(idx)
+                u, conn, p, approved, status = pending_users.pop(idx)
+                status["value"] = "rejected"
                 try:
                     conn.send(encrypt_message("rejected"))
-                    conn.close()
                 except:
                     pass
                 approved.set()
-                save_user(u, p, "block")
                 print(f"[-] Rejected {u}")
         elif choice == "4":
             if not clients:
@@ -181,10 +145,9 @@ def admin_interface():
         elif choice == "5":
             u = input("User to block: ").strip()
             blocked_users.add(u)
-            save_user(u, "x", "block")
             if u in clients:
                 remove_client(u)
-            print(f"Blocked {u}")
+            print(f"[BLOCKED] {u}")
         elif choice == "6":
             break
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
