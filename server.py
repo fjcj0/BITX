@@ -5,6 +5,11 @@ from crypto_chat import encrypt_message, decrypt_message
 from cryptography.fernet import Fernet
 import time
 import json
+from prompt_toolkit.application import Application
+from prompt_toolkit.layout import Layout, HSplit, VSplit
+from prompt_toolkit.widgets import TextArea, Frame, Box
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout.containers import DynamicContainer
 init(autoreset=True)
 PORT = 5010
 HIDDEN_SERVICE_DIR = "./global_chat"
@@ -153,39 +158,149 @@ def handle_client(conn, addr):
         conn.close()
 def admin_interface():
     print_logo()
-    while True:
-        print("\n1. Accept pending users\n2. Show connected users\n3. Block a user\n4. Exit")
-        choice = input("Choice: ").strip()
-        if choice=="1":
-            if not pending_users: 
-                print("No pending users."); continue
-            for username, conn, password in pending_users.copy():
-                accept = input(f"Accept {username}? (y/n): ").strip().lower()
-                if accept=="y":
-                    pending_users.remove((username, conn, password))
-                    conn.send("accepted".encode())
-                    save_user(username, password, "unblock")
+    menu_options = [
+        "Accept pending users",
+        "Show connected users",
+        "Block a user",
+        "Exit"
+    ]
+    selected_index = [0]
+    screen = TextArea(text="", focusable=False)
+    def render_menu():
+        out = "\n".join(
+            [
+                f"> {opt}" if i == selected_index[0] else f"  {opt}"
+                for i, opt in enumerate(menu_options)
+            ]
+        )
+        screen.text = out
+    render_menu()
+    kb = KeyBindings()
+    @kb.add("up")
+    def up(event):
+        selected_index[0] = (selected_index[0] - 1) % len(menu_options)
+        render_menu()
+    @kb.add("down")
+    def down(event):
+        selected_index[0] = (selected_index[0] + 1) % len(menu_options)
+        render_menu()
+    def confirm_dialog(title, items):
+        idx = [0]
+        box = TextArea(text="", focusable=False)
+        def draw():
+            box.text = f"{title}\n\n" + "   ".join(
+                ["[ YES ]" if idx[0] == 0 else "  YES  ",
+                 "[ NO ]" if idx[0] == 1 else "  NO  "]
+            )
+        draw()
+        def run():
+            app2 = Application(
+                layout=Layout(Frame(box)),
+                key_bindings=kb2,
+                full_screen=True
+            )
+            app2.run()
+        kb2 = KeyBindings()
+        @kb2.add("left")
+        def left(event):
+            idx[0] = 0
+            draw()
+        @kb2.add("right")
+        def right(event):
+            idx[0] = 1
+            draw()
+        result = {"value": None}
+        @kb2.add("enter")
+        def enter(event):
+            result["value"] = (idx[0] == 0)
+            event.app.exit()
+        app2 = Application(
+            layout=Layout(Frame(box)),
+            key_bindings=kb2,
+            full_screen=True
+        )
+        app2.run()
+        return result["value"]
+    def select_user(title, user_list):
+        idx = [0]
+        box = TextArea(text="", focusable=False)
+        def draw():
+            if not user_list:
+                box.text = "No users available"
+                return
+            box.text = title + "\n\n" + "\n".join(
+                [
+                    f"> {u}" if i == idx[0] else f"  {u}"
+                    for i, u in enumerate(user_list)
+                ]
+            )
+        draw()
+        result = {"value": None}
+        kb2 = KeyBindings()
+        @kb2.add("up")
+        def up(event):
+            if user_list:
+                idx[0] = (idx[0] - 1) % len(user_list)
+                draw()
+        @kb2.add("down")
+        def down(event):
+            if user_list:
+                idx[0] = (idx[0] + 1) % len(user_list)
+                draw()
+        @kb2.add("enter")
+        def enter(event):
+            if user_list:
+                result["value"] = user_list[idx[0]]
+            event.app.exit()
+        app2 = Application(
+            layout=Layout(Frame(box)),
+            key_bindings=kb2,
+            full_screen=True
+        )
+        app2.run()
+        return result["value"]
+    @kb.add("enter")
+    def enter(event):
+        choice = menu_options[selected_index[0]]
+        if choice == "Accept pending users":
+            while pending_users:
+                users = [u[0] for u in pending_users]
+                user = select_user("Pending Users", users)
+                if not user:
+                    break
+                if confirm_dialog(f"Accept {user}?", ["YES", "NO"]):
+                    for item in pending_users:
+                        if item[0] == user:
+                            pending_users.remove(item)
+                            item[1].send("accepted".encode())
+                            save_user(item[0], item[2], "unblock")
+                            break
                 else:
-                    pending_users.remove((username, conn, password))
-                    conn.send("rejected".encode())
-                    conn.close()
-                    save_user(username, password, "block")
-        elif choice=="2":
-            if not clients: print("No users connected.")
-            else:
-                print("Connected users:")
-                for user in clients.keys(): print(f" [+] {user}")
-        elif choice=="3":
-            user_to_block = input("Enter username to block: ").strip()
-            if user_to_block in clients:
-                save_user(user_to_block, "dummy_password", "block")
-                blocked_users.add(user_to_block)
-                remove_client(user_to_block)
-                print(f"{user_to_block} has been blocked.")
-            else:
-                print("User not found.")
-        elif choice=="4":
-            break
+                    for item in pending_users:
+                        if item[0] == user:
+                            pending_users.remove(item)
+                            item[1].send("rejected".encode())
+                            item[1].close()
+                            save_user(item[0], item[2], "block")
+                            break
+        elif choice == "Show connected users":
+            users = list(clients.keys())
+            select_user("Connected Users (Live)", users)
+        elif choice == "Block a user":
+            users = list(clients.keys())
+            user = select_user("Block User", users)
+            if user and confirm_dialog(f"Block {user}?", ["YES", "NO"]):
+                save_user(user, "dummy", "block")
+                blocked_users.add(user)
+                remove_client(user)
+        elif choice == "Exit":
+            event.app.exit()
+    app = Application(
+        layout=Layout(Frame(screen, title="ADMIN PANEL")),
+        key_bindings=kb,
+        full_screen=True
+    )
+    app.run()
 os.makedirs(HIDDEN_SERVICE_DIR, exist_ok=True)
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(("127.0.0.1", PORT))
