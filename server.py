@@ -3,7 +3,6 @@ import threading
 import os
 import random
 import json
-import time
 from datetime import datetime
 from colorama import Fore, init
 from crypto_chat import encrypt_message, decrypt_message
@@ -13,10 +12,9 @@ HOST = "127.0.0.1"
 HIDDEN_DIR = "./global_chat"
 USERS_FILE = os.path.join(HIDDEN_DIR, "users_status.enc")
 clients = {}
-pending_users = []
+pending_users = []  # (username, conn, password, event)
 blocked_users = set()
 user_colors = {}
-ADMIN_USERNAME = "admin"
 COLOR_MAP = {
     "RED": Fore.RED,
     "GREEN": Fore.GREEN,
@@ -63,8 +61,7 @@ def save_user(username, password, status):
     rows = load_users()
     for r in rows:
         if r[0] == username:
-            r[1] = password
-            r[2] = status
+            r[1], r[2] = password, status
             break
     else:
         rows.append([username, password, status])
@@ -105,20 +102,13 @@ def handle_client(conn, addr):
             conn.send(b"exists")
             conn.close()
             return
-        if any(u[0] == username for u in pending_users):
-            conn.send(b"pending")
+        approved = threading.Event()
+        pending_users.append((username, conn, password, approved))
+        print(f"[PENDING] {username}")
+        approved.wait() 
+        if username in blocked_users:
             conn.close()
             return
-        rows = load_users()
-        if any(r[0] == username for r in rows):
-            if not verify_user(username, password):
-                conn.send(b"wrong")
-                conn.close()
-                return
-        pending_users.append((username, conn, password))
-        print(f"[PENDING] {username}")
-        while (username, conn, password) in pending_users:
-            time.sleep(0.3)
         clients[username] = conn
         user_colors[username] = random.choice(list(COLOR_MAP.keys()))
         save_user(username, password, "unblock")
@@ -137,7 +127,7 @@ def handle_client(conn, addr):
         conn.close()
 def admin_interface():
     while True:
-        print("1. Show pending users")
+        print("\n1. Show pending users")
         print("2. Accept user")
         print("3. Reject user")
         print("4. Connected users")
@@ -148,30 +138,38 @@ def admin_interface():
             if not pending_users:
                 print("No pending users")
             else:
-                for i, (u, _, _) in enumerate(pending_users):
+                for i, (u, _, _, _) in enumerate(pending_users):
                     print(f"{i+1}. {u}")
         elif choice == "2":
             if not pending_users:
                 print("No pending users")
                 continue
-            for i, (u, _, _) in enumerate(pending_users):
+            for i, (u, _, _, _) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
-                u, conn, p = pending_users.pop(idx)
-                conn.send(encrypt_message("accepted"))
+                u, conn, p, approved = pending_users.pop(idx)
+                try:
+                    conn.send(encrypt_message("accepted"))
+                except:
+                    pass
+                approved.set() 
                 print(f"[+] Accepted {u}")
         elif choice == "3":
             if not pending_users:
                 print("No pending users")
                 continue
-            for i, (u, _, _) in enumerate(pending_users):
+            for i, (u, _, _, _) in enumerate(pending_users):
                 print(f"{i+1}. {u}")
             idx = int(input("Select user: ")) - 1
             if 0 <= idx < len(pending_users):
-                u, conn, p = pending_users.pop(idx)
-                conn.send(encrypt_message("rejected"))
-                conn.close()
+                u, conn, p, approved = pending_users.pop(idx)
+                try:
+                    conn.send(encrypt_message("rejected"))
+                    conn.close()
+                except:
+                    pass
+                approved.set()
                 save_user(u, p, "block")
                 print(f"[-] Rejected {u}")
         elif choice == "4":
