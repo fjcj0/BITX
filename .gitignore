@@ -2,3 +2,7 @@ global_chat
 env
 .DS_Store
 crypto_chat.py
+chat.key
+global_chat
+global_chat/users_status.enc
+global_chat/secret.key
